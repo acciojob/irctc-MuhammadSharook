@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 @Service
@@ -26,7 +27,27 @@ public class TrainService {
         //and route String logic to be taken from the Problem statement.
         //Save the train and return the trainId that is generated from the database.
         //Avoid using the lombok library
-        return null;
+
+        Train train = new Train();
+        train.setNoOfSeats(trainEntryDto.getNoOfSeats());
+        train.setDepartureTime(trainEntryDto.getDepartureTime());
+
+        List<Station> stationList = trainEntryDto.getStationRoute();
+        String route = "";
+        for(int i = 0; i < stationList.size(); i++)
+        {
+            if(i == stationList.size()-1)
+            {
+                route += stationList.get(i);
+            }
+            else
+            {
+                route += stationList.get(i) + ",";
+            }
+        }
+
+        train.setRoute(route);
+        return trainRepository.save(train).getTrainId();
     }
 
     public Integer calculateAvailableSeats(SeatAvailabilityEntryDto seatAvailabilityEntryDto){
@@ -40,7 +61,43 @@ public class TrainService {
         //Inshort : a train has totalNo of seats and there are tickets from and to different locations
         //We need to find out the available seats between the given 2 stations.
 
-       return null;
+        Train train = trainRepository.findById(seatAvailabilityEntryDto.getTrainId()).get();
+        List<Ticket> ticketList = train.getBookedTickets();
+        String []train_root = train.getRoute().split(",");
+
+        HashMap<String,Integer> hm = new HashMap<>();
+
+        for(int i = 0; i < train_root.length; i++)
+        {
+            hm.put(train_root[i],i);
+        }
+
+        if(!hm.containsKey(seatAvailabilityEntryDto.getFromStation().toString()) || !hm.containsKey(seatAvailabilityEntryDto.getToStation().toString()))
+        {
+            return 0;
+        }
+
+        int booked_ticket = 0;
+        for(Ticket ticket : ticketList)
+        {
+            booked_ticket += ticket.getPassengersList().size();
+        }
+
+        int seats_available = train.getNoOfSeats() - booked_ticket;
+
+        for(Ticket ticket : ticketList)
+        {
+            String fromStation = ticket.getFromStation().toString();
+            String toStation = ticket.getToStation().toString();
+            if(hm.get(seatAvailabilityEntryDto.getToStation().toString()) <= hm.get(fromStation))
+            {
+                seats_available++;
+            } else if (hm.get(seatAvailabilityEntryDto.getFromStation().toString()) >= hm.get(fromStation)) {
+                seats_available++;
+            }
+        }
+
+       return seats_available+2;
     }
 
     public Integer calculatePeopleBoardingAtAStation(Integer trainId,Station station) throws Exception{
@@ -51,7 +108,36 @@ public class TrainService {
         //  in a happy case we need to find out the number of such people.
 
 
-        return 0;
+        Train train = trainRepository.findById(trainId).get();
+        String []train_route = train.getRoute().split(",");
+        String req_Station = station.toString();
+
+        boolean present = false;
+        for(String s : train_route)
+        {
+            if(s.equals(req_Station))
+            {
+                present = true;
+                break;
+            }
+        }
+
+        if(!present)
+        {
+            throw new Exception("Train is not passing from this station");
+        }
+
+        int no_of_Passengers = 0;
+
+        List<Ticket> ticketList = train.getBookedTickets();
+        for(Ticket ticket : ticketList)
+        {
+            if(ticket.getFromStation().toString().equals(req_Station))
+            {
+                no_of_Passengers += ticket.getPassengersList().size();
+            }
+        }
+        return no_of_Passengers;
     }
 
     public Integer calculateOldestPersonTravelling(Integer trainId){
@@ -60,7 +146,23 @@ public class TrainService {
         //We need to find out the age of the oldest person that is travelling the train
         //If there are no people travelling in that train you can return 0
 
-        return 0;
+        Train train = trainRepository.findById(trainId).get();
+        int max_age = Integer.MIN_VALUE;
+
+
+        if(train.getBookedTickets().isEmpty())return 0;
+
+        List<Ticket> ticketList = train.getBookedTickets();
+        for(Ticket ticket : ticketList)
+        {
+            List<Passenger> passengerList = ticket.getPassengersList();
+            for(Passenger passenger : passengerList)
+            {
+                max_age = Math.max(max_age,passenger.getAge());
+            }
+        }
+
+        return max_age;
     }
 
     public List<Integer> trainsBetweenAGivenTime(Station station, LocalTime startTime, LocalTime endTime){
@@ -71,7 +173,31 @@ public class TrainService {
         //in problem statement)
         //You can also assume the seconds and milli seconds value will be 0 in a LocalTime format.
 
-        return null;
+        List<Integer> list = new ArrayList<>();
+
+        List<Train> trainList = trainRepository.findAll();
+
+        for(Train train : trainList)
+        {
+            String []train_route = train.getRoute().split(",");
+            for(int i = 0; i < train_route.length; i++)
+            {
+                if(train_route[i].equals(station.toString()))
+                {
+                    int StartTimemin = (startTime.getHour() * 60) + startTime.getMinute();
+                    int EndTimemin = (endTime.getHour() * 60) + endTime.getMinute();
+
+                    int departureTimemin = (train.getDepartureTime().getHour() * 60) + train.getDepartureTime().getMinute();
+                    int arrivalTimemin = departureTimemin + (i * 60);
+
+                    if(arrivalTimemin >= StartTimemin && arrivalTimemin <= EndTimemin)
+                    {
+                        list.add(train.getTrainId());
+                    }
+                }
+            }
+        }
+        return list;
     }
 
 }
